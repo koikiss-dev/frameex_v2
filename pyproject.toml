@@ -1,9 +1,14 @@
 [project]
-name = "frameex-v2"
+name = "framex"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "opencv-python>=5.0.0.93",
+]
+
+[dependency-groups]
+dev = [
+    "auto-py-to-exe>=2.50.1",
 ]
