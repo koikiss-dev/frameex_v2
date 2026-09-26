@@ -18,7 +18,18 @@ from tkinter import filedialog as fl, messagebox
 import cv2 as cv
 import customtkinter as ctk
 
-from utils import formatTime
+
+
+
+def formatTime(ms: int) -> str:
+    horas, resto = divmod(ms, 3_600_000)
+    minutos, resto = divmod(resto, 60_000)
+    segundos, milisegundos = divmod(resto, 1_000)
+
+    if horas > 0:
+        return f"{horas:02d}_{minutos:02d}_{segundos:02d}"
+
+    return f"{horas:02d}_{minutos:02d}_{segundos:02d}"
 
 
 CONVERT_MINUTE_VALUE = 60
@@ -578,7 +589,7 @@ class App:
                     break
 
                 if (current_frame - start_frame) % frame_step == 0:
-                    filename = f"imagen-{total_images + 1}-{timestamp}.png"
+                    filename = f"{timestamp}.png"
                     self.write_frames_to_images(destine, filename, frame)
                     self.log(f"Guardado: {filename}")
                     total_images += 1
