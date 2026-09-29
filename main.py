@@ -18,44 +18,13 @@ from tkinter import filedialog as fl, messagebox
 import cv2 as cv
 import customtkinter as ctk
 
-
-
-
-def formatTime(ms: int) -> str:
-    horas, resto = divmod(ms, 3_600_000)
-    minutos, resto = divmod(resto, 60_000)
-    segundos, milisegundos = divmod(resto, 1_000)
-
-    if horas > 0:
-        return f"{horas:02d}_{minutos:02d}_{segundos:02d}"
-
-    return f"{horas:02d}_{minutos:02d}_{segundos:02d}"
+from utils import formatTime, getMaxMinute
 
 
 CONVERT_MINUTE_VALUE = 60
 HOME_PATH = Path.home()
-VIDEO_MAX_MINUTES = 120
+VIDEO_MAX_MINUTES = 180
 DEFAULT_INTERVAL_SECONDS = 10
-
-
-def getMaxMinute(source: str) -> float:
-    """Obtiene la duración exacta del video en minutos."""
-    cap = None
-    try:
-        cap = cv.VideoCapture(source)
-        if not cap.isOpened():
-            raise Exception(f"No se pudo abrir el video: {source}")
-
-        total_frames = cap.get(cv.CAP_PROP_FRAME_COUNT)
-        fps = cap.get(cv.CAP_PROP_FPS)
-        if fps <= 0:
-            raise Exception("No se pudieron calcular los FPS del video.")
-
-        return total_frames / (fps * CONVERT_MINUTE_VALUE)
-    finally:
-        if cap is not None:
-            cap.release()
-
 
 class App:
     def __init__(self, root: ctk.CTk):
@@ -333,7 +302,7 @@ class App:
             start = self.time_to_minutes(self.start_time_vars)
             end = self.time_to_minutes(self.end_time_vars)
             interval = int(self.interval_value.get())
-        except ValueError:
+        except ValueError as e:
             return False, "Revise el formato de tiempo y el intervalo."
         if interval <= 0:
             return False, "El intervalo debe ser mayor que cero."
@@ -347,10 +316,12 @@ class App:
         try:
             start = self.time_to_minutes(self.start_time_vars)
             end = self.time_to_minutes(self.end_time_vars)
+            se = (end - start) * 60
             interval = int(self.interval_value.get())
+            cant = math.floor(se / interval) + 1
             self.summary_value.set(
                 f"Se extraerá una imagen cada {interval} segundos, desde "
-                f"{self.display_time(start)} hasta {self.display_time(end)}."
+                f"{self.display_time(start)} hasta {self.display_time(end)}. Total de imagenes a extraer: {cant}"
             )
         except (ValueError, TypeError):
             self.summary_value.set("Ingrese valores válidos para generar el resumen.")
@@ -385,7 +356,7 @@ class App:
         try:
             duration = getMaxMinute(selected)
             if duration > VIDEO_MAX_MINUTES:
-                raise Exception("La grabación no debe superar las 2 horas.")
+                raise Exception("La grabación no debe superar las 3 horas.")
             self.video_duration_minutes = duration
             self.video_value.set(selected)
             self.duration_value.set(f"Duración detectada: {self.display_time(duration)}")
@@ -568,11 +539,14 @@ class App:
                 f"FPS: {fps:.2f} | Total frames: {int(total_frames)}"
             )
 
-            frame_count = 0
+
             total_images = 0
             current_frame = start_frame
-            frame_step = max(1, int(fps * frame_interval_second))
             extraction_length = max(1, end_frame - start_frame)
+            frame_jump = int(fps) * frame_interval_second
+            
+            """ already_files = [f.name for f in Path(destine).iterdir() if f.is_file()] if Path(destine).exists() else []
+            print(already_files) """
 
             while cap_video.isOpened() and current_frame <= end_frame:
                 if self.stop_event.is_set():
@@ -588,16 +562,20 @@ class App:
                 if not frame_read_success:
                     break
 
-                if (current_frame - start_frame) % frame_step == 0:
-                    filename = f"{timestamp}.png"
-                    self.write_frames_to_images(destine, filename, frame)
-                    self.log(f"Guardado: {filename}")
-                    total_images += 1
-                    progress = min(1, (current_frame - start_frame) / extraction_length)
-                    self.emit("progress", progress, total_images)
+                filename = f"{timestamp}.png"
+                
+                self.write_frames_to_images(destine, filename, frame)
+                self.log(f"Guardado: {filename}")
+                
+                total_images += 1
+                progress = min(1, (current_frame - start_frame) / extraction_length)
+                self.emit("progress", progress, total_images)
+                
+                current_frame += frame_jump
+                cap_video.set(cv.CAP_PROP_POS_FRAMES, current_frame)
+                
+                    
 
-                frame_count += 1
-                current_frame += 1
 
             if status != "cancelled":
                 status = "success"
