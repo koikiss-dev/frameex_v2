@@ -19,6 +19,7 @@ import cv2 as cv
 import customtkinter as ctk
 
 from utils import formatTime, getMaxMinute
+from logger import levels, Logger
 
 
 CONVERT_MINUTE_VALUE = 60
@@ -55,6 +56,8 @@ class App:
         self.attach_traces()
         self.update_form_state()
         self.poll_ui_events()
+        
+        self.lo = Logger()
 
     @staticmethod
     def create_time_variables() -> dict[str, ctk.StringVar]:
@@ -446,8 +449,9 @@ class App:
     def emit(self, event_type: str, *payload):
         self.ui_events.put((event_type, *payload))
 
-    def log(self, message: str):
-        self.emit("log", str(message))
+    def log(self, message: str, level:levels):
+        
+        self.emit("log", self.lo.log(message, level))
 
     def poll_ui_events(self):
         try:
@@ -514,7 +518,7 @@ class App:
             if end_time < start_time:
                 raise Exception("El tiempo final no puede ser menor al inicial.")
 
-            self.log(f"Abriendo archivo: {source}")
+            self.log(f"Abriendo archivo: {source}", 'INFO')
             cap_video = cv.VideoCapture(source)
             if not cap_video.isOpened():
                 raise Exception(f"No se pudo abrir el video: {source}")
@@ -526,7 +530,7 @@ class App:
 
             if fps <= 0:
                 status_message = "No se pudieron calcular los FPS del video."
-                self.log(status_message)
+                self.log(status_message, 'WARN')
                 return
             if total_frames / (fps * 60) > VIDEO_MAX_MINUTES:
                 raise Exception("La grabación no debe superar las 2 horas.")
@@ -534,21 +538,53 @@ class App:
             start_frame = int(fps * (start_time * CONVERT_MINUTE_VALUE))
             end_frame = int(fps * (end_time * CONVERT_MINUTE_VALUE))
             cap_video.set(cv.CAP_PROP_POS_FRAMES, start_frame)
-            self.log(
-                f"Resolución: {int(width)}x{int(height)} | "
-                f"FPS: {fps:.2f} | Total frames: {int(total_frames)}"
-            )
+            self.log(f"Resolución: {int(width)}x{int(height)} | FPS: {fps:.2f} | Total frames: {int(total_frames)}", "INFO")
 
 
             total_images = 0
-            current_frame = start_frame
             extraction_length = max(1, end_frame - start_frame)
             frame_jump = int(fps) * frame_interval_second
             
             """ already_files = [f.name for f in Path(destine).iterdir() if f.is_file()] if Path(destine).exists() else []
             print(already_files) """
+            
+            for x in range(start_frame, end_frame, frame_jump):
+                cap_video.set(cv.CAP_PROP_POS_FRAMES, x)
+                
+                
+                
+                if self.stop_event.is_set():
+                    status = "cancelled"
+                    status_message = "El proceso fue cancelado por el usuario."
+                    self.log(status_message, 'WARN')
+                    break
+                
+                frame_read_success, frame = cap_video.read()
+                
+                if not frame_read_success:
+                    break
+                
+                timestamp: str = formatTime(
+                    int(cap_video.get(cv.CAP_PROP_POS_MSEC))
+                )
+                
+                
 
-            while cap_video.isOpened() and current_frame <= end_frame:
+                filename = f"{timestamp}.png"
+                final_write_image = Path(destine, filename)
+                
+                
+                self.write_frames_to_images(destine, filename, frame)
+                self.log(f"Imagen guardada en {final_write_image}", 'SUCCESS')
+                
+                total_images += 1
+                progress = min(1, (x - start_frame) / extraction_length)
+                self.emit("progress", progress, total_images)
+                #print(end_frame,(int(fps) * frame_interval_second))
+                
+                
+                    
+            """ while cap_video.isOpened() and current_frame <= end_frame:
                 if self.stop_event.is_set():
                     status = "cancelled"
                     status_message = "El proceso fue cancelado por el usuario."
@@ -572,7 +608,7 @@ class App:
                 self.emit("progress", progress, total_images)
                 
                 current_frame += frame_jump
-                cap_video.set(cv.CAP_PROP_POS_FRAMES, current_frame)
+                cap_video.set(cv.CAP_PROP_POS_FRAMES, current_frame) """
                 
                     
 
@@ -582,12 +618,12 @@ class App:
                 status_message = (
                     f"Proceso finalizado con éxito. Se procesaron {total_images} imágenes."
                 )
-                self.log(status_message)
+                self.log(status_message, 'SUCCESS')
                 self.emit("progress", 1.0, total_images)
         except Exception as error:
             status = "error"
             status_message = f"Ocurrió un error inesperado: {error}"
-            self.log(status_message)
+            self.log(status_message, 'ERROR')
         finally:
             if cap_video is not None:
                 cap_video.release()
