@@ -20,12 +20,13 @@ import customtkinter as ctk
 
 from utils import formatTime, getMaxMinute
 from logger import levels, Logger
-
+from concurrent.futures import ThreadPoolExecutor
 
 CONVERT_MINUTE_VALUE = 60
 HOME_PATH = Path.home()
 VIDEO_MAX_MINUTES = 180
 DEFAULT_INTERVAL_SECONDS = 10
+
 
 class App:
     def __init__(self, root: ctk.CTk):
@@ -44,10 +45,14 @@ class App:
         self.directory_value = ctk.StringVar()
         self.until_end_value = ctk.BooleanVar(value=False)
         self.interval_value = ctk.StringVar(value=str(DEFAULT_INTERVAL_SECONDS))
-        self.status_value = ctk.StringVar(value="Seleccione una grabación para comenzar.")
+        self.status_value = ctk.StringVar(
+            value="Seleccione una grabación para comenzar."
+        )
         self.progress_value = ctk.StringVar(value="0 %")
         self.duration_value = ctk.StringVar(value="Duración: sin calcular")
-        self.summary_value = ctk.StringVar(value="Complete los pasos para ver el resumen.")
+        self.summary_value = ctk.StringVar(
+            value="Complete los pasos para ver el resumen."
+        )
 
         self.start_time_vars = self.create_time_variables()
         self.end_time_vars = self.create_time_variables()
@@ -56,8 +61,9 @@ class App:
         self.attach_traces()
         self.update_form_state()
         self.poll_ui_events()
-        
+
         self.lo = Logger()
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
     @staticmethod
     def create_time_variables() -> dict[str, ctk.StringVar]:
@@ -94,34 +100,36 @@ class App:
             text="Extracción de fotogramas",
             font=ctk.CTkFont(size=24, weight="bold"),
         ).grid(row=0, column=0, sticky="w")
-        
+
         ctk.CTkLabel(
             header,
             text="Seleccione una grabación, configure el rango y genere las imágenes.",
             text_color=("gray35", "gray70"),
         ).grid(row=1, column=0, sticky="w", pady=(2, 0))
-        
-        ctk.CTkButton(
-            header, text="Ayuda", width=90, command=self.show_help
-        ).grid(row=0, column=1, rowspan=2, padx=(10, 0))
 
-        selection = self.create_section(1, "1. Seleccione la grabación y la carpeta de destino")
+        ctk.CTkButton(header, text="Ayuda", width=90, command=self.show_help).grid(
+            row=0, column=1, rowspan=2, padx=(10, 0)
+        )
+
+        selection = self.create_section(
+            1, "1. Seleccione la grabación y la carpeta de destino"
+        )
         selection.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(selection, text="Grabación de Teams").grid(
             row=1, column=0, sticky="w", padx=16, pady=7
         )
-        
+
         self.video_entry = ctk.CTkEntry(
             selection, textvariable=self.video_value, state="readonly"
         )
-        
+
         self.video_entry.grid(row=1, column=1, sticky="ew", padx=10, pady=7)
-        
+
         self.video_button = ctk.CTkButton(
             selection, text="Seleccionar grabación", command=self.set_video_path
         )
-        
+
         self.video_button.grid(row=1, column=2, padx=(0, 16), pady=7)
 
         ctk.CTkLabel(selection, textvariable=self.duration_value).grid(
@@ -131,18 +139,18 @@ class App:
         ctk.CTkLabel(selection, text="Carpeta donde se guardarán").grid(
             row=3, column=0, sticky="w", padx=16, pady=7
         )
-        
+
         self.directory_entry = ctk.CTkEntry(
             selection, textvariable=self.directory_value, state="readonly"
         )
-        
+
         self.directory_entry.grid(row=3, column=1, sticky="ew", padx=10, pady=7)
         self.directory_button = ctk.CTkButton(
             selection, text="Seleccionar carpeta", command=self.set_directory
         )
-        
+
         self.directory_button.grid(row=3, column=2, padx=(0, 16), pady=7)
-        
+
         ctk.CTkLabel(
             selection,
             text="Se creará una carpeta nueva para no sobrescribir resultados anteriores.",
@@ -167,7 +175,9 @@ class App:
         self.until_end_checkbox.grid(row=2, column=1, sticky="w", padx=16, pady=(0, 12))
 
         interval_frame = ctk.CTkFrame(configuration, fg_color="transparent")
-        interval_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 14))
+        interval_frame.grid(
+            row=3, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 14)
+        )
         ctk.CTkLabel(interval_frame, text="Extraer una imagen cada").pack(side="left")
         self.interval_entry = ctk.CTkEntry(
             interval_frame, width=75, textvariable=self.interval_value, justify="center"
@@ -217,19 +227,24 @@ class App:
         )
 
         self.details_button = ctk.CTkButton(
-            results, text="Ver detalles técnicos", width=160, command=self.toggle_details
+            results,
+            text="Ver detalles técnicos",
+            width=160,
+            command=self.toggle_details,
         )
         self.details_button.grid(row=2, column=0, sticky="w", padx=16, pady=8)
 
-        self.log_text = ctk.CTkTextbox(results, height=150, state="disabled", wrap="word")
+        self.log_text = ctk.CTkTextbox(
+            results, height=150, state="disabled", wrap="word"
+        )
         self.details_visible = False
 
     def create_section(self, row: int, title: str) -> ctk.CTkFrame:
         frame = ctk.CTkFrame(self.main_scroll)
         frame.grid(row=row, column=0, sticky="ew", padx=24, pady=7)
-        ctk.CTkLabel(
-            frame, text=title, font=ctk.CTkFont(size=16, weight="bold")
-        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=16, pady=(12, 6))
+        ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(size=16, weight="bold")).grid(
+            row=0, column=0, columnspan=3, sticky="w", padx=16, pady=(12, 6)
+        )
         return frame
 
     def create_time_input(self, parent, row: int, column: int, title: str):
@@ -242,7 +257,9 @@ class App:
 
         labels = (("hours", "Hora"), ("minutes", "Minuto"), ("seconds", "Segundo"))
         for index, (key, label) in enumerate(labels):
-            entry = ctk.CTkEntry(frame, width=70, justify="center", textvariable=variables[key])
+            entry = ctk.CTkEntry(
+                frame, width=70, justify="center", textvariable=variables[key]
+            )
             entry.grid(row=1, column=index * 2, sticky="w")
             ctk.CTkLabel(frame, text=label, text_color=("gray35", "gray70")).grid(
                 row=2, column=index * 2, sticky="w"
@@ -250,7 +267,7 @@ class App:
             if index < 2:
                 ctk.CTkLabel(frame, text=":").grid(row=1, column=index * 2 + 1, padx=5)
 
-        frame.entries = [child for child in frame.winfo_children() if isinstance(child, ctk.CTkEntry)] # type: ignore
+        frame.entries = [child for child in frame.winfo_children() if isinstance(child, ctk.CTkEntry)]  # type: ignore
         return frame
 
     def on_form_change(self, *_):
@@ -261,7 +278,9 @@ class App:
         enabled = not self.until_end_value.get() and not self.is_processing
         self.set_time_frame_enabled(self.end_time_frame, enabled)
         if self.until_end_value.get() and self.video_duration_minutes > 0:
-            self.set_time_variables_from_minutes(self.end_time_vars, self.video_duration_minutes)
+            self.set_time_variables_from_minutes(
+                self.end_time_vars, self.video_duration_minutes
+            )
         self.update_summary()
         self.update_form_state()
 
@@ -277,7 +296,9 @@ class App:
         minutes = int(variables["minutes"].get() or 0)
         seconds = int(variables["seconds"].get() or 0)
         if hours < 0 or minutes not in range(60) or seconds not in range(60):
-            raise ValueError("Use horas positivas y valores entre 0 y 59 para minutos y segundos.")
+            raise ValueError(
+                "Use horas positivas y valores entre 0 y 59 para minutos y segundos."
+            )
         return hours * 60 + minutes + seconds / 60
 
     @staticmethod
@@ -334,17 +355,30 @@ class App:
         has_directory = bool(self.directory_value.get().strip())
         ready, reason = self.validate_form()
 
-        self.directory_button.configure(state="normal" if has_video and not self.is_processing else "disabled")
+        self.directory_button.configure(
+            state="normal" if has_video and not self.is_processing else "disabled"
+        )
         configuration_enabled = has_video and has_directory and not self.is_processing
         self.set_time_frame_enabled(self.start_time_frame, configuration_enabled)
         self.set_time_frame_enabled(
-            self.end_time_frame, configuration_enabled and not self.until_end_value.get()
+            self.end_time_frame,
+            configuration_enabled and not self.until_end_value.get(),
         )
-        self.interval_entry.configure(state="normal" if configuration_enabled else "disabled")
-        self.until_end_checkbox.configure(state="normal" if configuration_enabled else "disabled")
-        self.video_button.configure(state="disabled" if self.is_processing else "normal")
-        self.start_button.configure(state="normal" if ready and not self.is_processing else "disabled")
-        self.cancel_button.configure(state="normal" if self.is_processing else "disabled")
+        self.interval_entry.configure(
+            state="normal" if configuration_enabled else "disabled"
+        )
+        self.until_end_checkbox.configure(
+            state="normal" if configuration_enabled else "disabled"
+        )
+        self.video_button.configure(
+            state="disabled" if self.is_processing else "normal"
+        )
+        self.start_button.configure(
+            state="normal" if ready and not self.is_processing else "disabled"
+        )
+        self.cancel_button.configure(
+            state="normal" if self.is_processing else "disabled"
+        )
         self.new_button.configure(state="disabled" if self.is_processing else "normal")
 
         if not self.is_processing and not ready and has_video and has_directory:
@@ -362,11 +396,15 @@ class App:
                 raise Exception("La grabación no debe superar las 3 horas.")
             self.video_duration_minutes = duration
             self.video_value.set(selected)
-            self.duration_value.set(f"Duración detectada: {self.display_time(duration)}")
+            self.duration_value.set(
+                f"Duración detectada: {self.display_time(duration)}"
+            )
             self.directory_value.set("")
             self.reset_configuration()
             self.set_time_variables_from_minutes(self.end_time_vars, duration)
-            self.status_value.set("Grabación válida. Ahora seleccione la carpeta de destino.")
+            self.status_value.set(
+                "Grabación válida. Ahora seleccione la carpeta de destino."
+            )
         except Exception as error:
             self.video_value.set("")
             self.video_duration_minutes = 0
@@ -382,7 +420,9 @@ class App:
         safe_name = re.sub(r"[^a-zA-Z0-9 _-]", "_", video_name)
         timestamp = f"{datetime.now():%Y_%m_%d_%H%M%S}"
         self.directory_value.set(str(Path(selected, f"{safe_name[:100]}_{timestamp}")))
-        self.status_value.set("Configuración disponible. Revise el rango de extracción.")
+        self.status_value.set(
+            "Configuración disponible. Revise el rango de extracción."
+        )
         self.update_form_state()
 
     def reset_configuration(self):
@@ -449,8 +489,8 @@ class App:
     def emit(self, event_type: str, *payload):
         self.ui_events.put((event_type, *payload))
 
-    def log(self, message: str, level:levels):
-        
+    def log(self, message: str, level: levels):
+
         self.emit("log", self.lo.log(message, level))
 
     def poll_ui_events(self):
@@ -463,7 +503,9 @@ class App:
                     value, total_images = payload
                     self.progress.set(value)
                     self.progress_value.set(f"{round(value * 100)} %")
-                    self.status_value.set(f"Extrayendo imágenes... {total_images} guardadas")
+                    self.status_value.set(
+                        f"Extrayendo imágenes... {total_images} guardadas"
+                    )
                 elif event_type == "finished":
                     self.on_process_finished(payload[0], payload[1])
         except queue.Empty:
@@ -486,16 +528,22 @@ class App:
             self.log_text.grid_forget()
             self.details_button.configure(text="Ver detalles técnicos")
         else:
-            self.log_text.grid(row=3, column=0, columnspan=2, sticky="nsew", padx=16, pady=(0, 12))
+            self.log_text.grid(
+                row=3, column=0, columnspan=2, sticky="nsew", padx=16, pady=(0, 12)
+            )
             self.details_button.configure(text="Ocultar detalles técnicos")
         self.details_visible = not self.details_visible
 
-    def write_frames_to_images(self, destine: str, title: str, frame: cv.typing.MatLike):
-        
+    def write_frames_to_images(
+        self, destine: str, title: str, frame: cv.typing.MatLike
+    ):
+
         destine_path = Path(destine)
         if not os.path.exists(f"{destine_path}"):
             os.makedirs(f"{destine_path}")
-        cv.imwrite(str(Path(destine_path, title)), frame)
+        cv.imwrite(
+            str(Path(destine_path, title)), frame, [cv.IMWRITE_JPEG_QUALITY, 100]
+        )
 
     def extract_frames(
         self,
@@ -505,7 +553,7 @@ class App:
         frame_interval_second: int,
         destine: str,
     ):
-        
+
         status = "error"
         status_message = "Error desconocido."
         cap_video = None
@@ -518,7 +566,7 @@ class App:
             if end_time < start_time:
                 raise Exception("El tiempo final no puede ser menor al inicial.")
 
-            self.log(f"Abriendo archivo: {source}", 'INFO')
+            self.log(f"Abriendo archivo: {source}", "INFO")
             cap_video = cv.VideoCapture(source)
             if not cap_video.isOpened():
                 raise Exception(f"No se pudo abrir el video: {source}")
@@ -530,7 +578,7 @@ class App:
 
             if fps <= 0:
                 status_message = "No se pudieron calcular los FPS del video."
-                self.log(status_message, 'WARN')
+                self.log(status_message, "WARN")
                 return
             if total_frames / (fps * 60) > VIDEO_MAX_MINUTES:
                 raise Exception("La grabación no debe superar las 2 horas.")
@@ -538,92 +586,57 @@ class App:
             start_frame = int(fps * (start_time * CONVERT_MINUTE_VALUE))
             end_frame = int(fps * (end_time * CONVERT_MINUTE_VALUE))
             cap_video.set(cv.CAP_PROP_POS_FRAMES, start_frame)
-            self.log(f"Resolución: {int(width)}x{int(height)} | FPS: {fps:.2f} | Total frames: {int(total_frames)}", "INFO")
-
+            self.log(
+                f"Resolución: {int(width)}x{int(height)} | FPS: {fps:.2f} | Total frames: {int(total_frames)}",
+                "INFO",
+            )
 
             total_images = 0
             extraction_length = max(1, end_frame - start_frame)
             frame_jump = int(fps) * frame_interval_second
-            
-            """ already_files = [f.name for f in Path(destine).iterdir() if f.is_file()] if Path(destine).exists() else []
-            print(already_files) """
-            
+
+            already_files = [f.name for f in Path(destine).iterdir() if f.is_file()] if Path(destine).exists() else []
+            print(already_files)
+
             for x in range(start_frame, end_frame, frame_jump):
                 cap_video.set(cv.CAP_PROP_POS_FRAMES, x)
-                
-                
-                
+
                 if self.stop_event.is_set():
                     status = "cancelled"
                     status_message = "El proceso fue cancelado por el usuario."
-                    self.log(status_message, 'WARN')
+                    self.log(status_message, "WARN")
                     break
-                
+
                 frame_read_success, frame = cap_video.read()
-                
+
                 if not frame_read_success:
                     break
-                
-                timestamp: str = formatTime(
-                    int(cap_video.get(cv.CAP_PROP_POS_MSEC))
-                )
-                
-                
 
-                filename = f"{timestamp}.png"
+                timestamp: str = formatTime(int(cap_video.get(cv.CAP_PROP_POS_MSEC)))
+
+                filename = f"{timestamp}.jpg"
                 final_write_image = Path(destine, filename)
-                
-                
-                self.write_frames_to_images(destine, filename, frame)
-                self.log(f"Imagen guardada en {final_write_image}", 'SUCCESS')
-                
+
+                #self.write_frames_to_images(destine, filename, frame)
+                self.executor.submit(self.write_frames_to_images, destine, filename, frame)
+                self.log(f"Imagen guardada en {final_write_image}", "SUCCESS")
+
                 total_images += 1
                 progress = min(1, (x - start_frame) / extraction_length)
                 self.emit("progress", progress, total_images)
-                #print(end_frame,(int(fps) * frame_interval_second))
-                
-                
-                    
-            """ while cap_video.isOpened() and current_frame <= end_frame:
-                if self.stop_event.is_set():
-                    status = "cancelled"
-                    status_message = "El proceso fue cancelado por el usuario."
-                    self.log(status_message)
-                    break
-
-                frame_read_success, frame = cap_video.read()
-                timestamp: str = formatTime(
-                    int(cap_video.get(cv.CAP_PROP_POS_MSEC))
-                )
-                if not frame_read_success:
-                    break
-
-                filename = f"{timestamp}.png"
-                
-                self.write_frames_to_images(destine, filename, frame)
-                self.log(f"Guardado: {filename}")
-                
-                total_images += 1
-                progress = min(1, (current_frame - start_frame) / extraction_length)
-                self.emit("progress", progress, total_images)
-                
-                current_frame += frame_jump
-                cap_video.set(cv.CAP_PROP_POS_FRAMES, current_frame) """
-                
-                    
+                # print(end_frame,(int(fps) * frame_interval_second))
 
 
             if status != "cancelled":
                 status = "success"
-                status_message = (
-                    f"Proceso finalizado con éxito. Se procesaron {total_images} imágenes."
-                )
-                self.log(status_message, 'SUCCESS')
+                status_message = f"Proceso finalizado con éxito. Se procesaron {total_images} imágenes."
+                self.log(status_message, "SUCCESS")
                 self.emit("progress", 1.0, total_images)
+
         except Exception as error:
             status = "error"
             status_message = f"Ocurrió un error inesperado: {error}"
-            self.log(status_message, 'ERROR')
+            self.log(status_message, "ERROR")
         finally:
             if cap_video is not None:
                 cap_video.release()
