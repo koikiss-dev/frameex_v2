@@ -9,18 +9,18 @@ import math
 import os
 import queue
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from threading import Event, Thread
+from tkinter import filedialog as fl
+from tkinter import messagebox
 
-from tkinter import filedialog as fl, messagebox
-
-import cv2 as cv
 import customtkinter as ctk
+import cv2 as cv
 
+from logger import Logger, levels
 from utils import formatTime, getMaxMinute
-from logger import levels, Logger
-from concurrent.futures import ThreadPoolExecutor
 
 CONVERT_MINUTE_VALUE = 60
 HOME_PATH = Path.home()

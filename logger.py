@@ -1,7 +1,7 @@
-from os import getenv
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import Literal
+
 levels = Literal["WARN", "INFO", "ERROR", "SUCCESS"]
 
 class Logger():
