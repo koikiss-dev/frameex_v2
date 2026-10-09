@@ -1,5 +1,6 @@
 import cv2 as cv
 
+
 def formatTime(ms: int) -> str:
     horas, resto = divmod(ms, 3_600_000)
     minutos, resto = divmod(resto, 60_000)

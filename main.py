@@ -267,7 +267,9 @@ class App:
             if index < 2:
                 ctk.CTkLabel(frame, text=":").grid(row=1, column=index * 2 + 1, padx=5)
 
-        frame.entries = [child for child in frame.winfo_children() if isinstance(child, ctk.CTkEntry)]  # type: ignore
+        frame.entries = [
+            child for child in frame.winfo_children() if isinstance(child, ctk.CTkEntry)
+        ]  # type: ignore
         return frame
 
     def on_form_change(self, *_):
@@ -595,7 +597,11 @@ class App:
             extraction_length = max(1, end_frame - start_frame)
             frame_jump = int(fps) * frame_interval_second
 
-            already_files = [f.name for f in Path(destine).iterdir() if f.is_file()] if Path(destine).exists() else []
+            already_files = (
+                [f.name for f in Path(destine).iterdir() if f.is_file()]
+                if Path(destine).exists()
+                else []
+            )
             print(already_files)
 
             for x in range(start_frame, end_frame, frame_jump):
@@ -617,15 +623,16 @@ class App:
                 filename = f"{timestamp}.jpg"
                 final_write_image = Path(destine, filename)
 
-                #self.write_frames_to_images(destine, filename, frame)
-                self.executor.submit(self.write_frames_to_images, destine, filename, frame)
+                # self.write_frames_to_images(destine, filename, frame)
+                self.executor.submit(
+                    self.write_frames_to_images, destine, filename, frame
+                )
                 self.log(f"Imagen guardada en {final_write_image}", "SUCCESS")
 
                 total_images += 1
                 progress = min(1, (x - start_frame) / extraction_length)
                 self.emit("progress", progress, total_images)
                 # print(end_frame,(int(fps) * frame_interval_second))
-
 
             if status != "cancelled":
                 status = "success"
