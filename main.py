@@ -4,23 +4,25 @@ Aplicación interna.
 
 Jorge Posadas
 """
-
-import math
-import os
-import queue
-import re
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-from pathlib import Path
-from threading import Event, Thread
-from tkinter import filedialog as fl
-from tkinter import messagebox
-
-import customtkinter as ctk
 import cv2 as cv
 
-from logger import Logger, levels
+import os
+from pathlib import Path
+
+import math
+import re
+from datetime import datetime
+
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Thread
+import queue
+
+from tkinter import filedialog as fl, messagebox
+import customtkinter as ctk
+
 from utils import formatTime, getMaxMinute
+from logger import levels, Logger
+
 
 CONVERT_MINUTE_VALUE = 60
 HOME_PATH = Path.home()
@@ -30,6 +32,7 @@ DEFAULT_INTERVAL_SECONDS = 10
 
 class App:
     def __init__(self, root: ctk.CTk):
+        #------------------- ROOT -------------------# 
         self.root = root
         self.root.geometry("920x820")
         self.root.minsize(840, 720)
@@ -41,6 +44,7 @@ class App:
         self.video_duration_minutes = 0.0
         self.saved_images = 0
 
+        #------------------- TKINTER VARIABLES -------------------#
         self.video_value = ctk.StringVar()
         self.directory_value = ctk.StringVar()
         self.until_end_value = ctk.BooleanVar(value=False)
@@ -54,6 +58,7 @@ class App:
             value="Complete los pasos para ver el resumen."
         )
 
+        #------------------- INVOKE FUNCTIONS AND MINI HELPERS -------------------#
         self.start_time_vars = self.create_time_variables()
         self.end_time_vars = self.create_time_variables()
 
@@ -62,8 +67,9 @@ class App:
         self.update_form_state()
         self.poll_ui_events()
 
+        #------------------- LOGGER AND PERFORMANCE -------------------#
         self.lo = Logger()
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.executor = ThreadPoolExecutor(max_workers=2)
 
     @staticmethod
     def create_time_variables() -> dict[str, ctk.StringVar]:
@@ -79,6 +85,7 @@ class App:
         self.interval_value.trace_add("write", self.on_form_change)
         self.until_end_value.trace_add("write", self.on_until_end_change)
 
+    #------------------- TKINTER COMPONENTS -------------------#
     def create_components(self):
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
@@ -267,9 +274,7 @@ class App:
             if index < 2:
                 ctk.CTkLabel(frame, text=":").grid(row=1, column=index * 2 + 1, padx=5)
 
-        frame.entries = [
-            child for child in frame.winfo_children() if isinstance(child, ctk.CTkEntry)
-        ]  # type: ignore
+        frame.entries = [child for child in frame.winfo_children() if isinstance(child, ctk.CTkEntry)]  # type: ignore
         return frame
 
     def on_form_change(self, *_):
@@ -419,6 +424,8 @@ class App:
         if not selected:
             return
         video_name = Path(self.video_value.get()).stem
+        
+        # LIMPIO EL NOMBRE DE LA CARPETA Y PARA QUE SEA COMPATIBLE CON WINDOWS
         safe_name = re.sub(r"[^a-zA-Z0-9 _-]", "_", video_name)
         timestamp = f"{datetime.now():%Y_%m_%d_%H%M%S}"
         self.directory_value.set(str(Path(selected, f"{safe_name[:100]}_{timestamp}")))
@@ -541,11 +548,11 @@ class App:
     ):
 
         destine_path = Path(destine)
+        
         if not os.path.exists(f"{destine_path}"):
             os.makedirs(f"{destine_path}")
-        cv.imwrite(
-            str(Path(destine_path, title)), frame, [cv.IMWRITE_JPEG_QUALITY, 100]
-        )
+            
+        cv.imwrite(str(Path(destine_path, title)), frame, [cv.IMWRITE_JPEG_QUALITY, 100])
 
     def extract_frames(
         self,
@@ -585,9 +592,10 @@ class App:
             if total_frames / (fps * 60) > VIDEO_MAX_MINUTES:
                 raise Exception("La grabación no debe superar las 2 horas.")
 
+            # START_TIME AND END_TIME CONVERT FROM MINUTES TO SECONDS
             start_frame = int(fps * (start_time * CONVERT_MINUTE_VALUE))
             end_frame = int(fps * (end_time * CONVERT_MINUTE_VALUE))
-            cap_video.set(cv.CAP_PROP_POS_FRAMES, start_frame)
+            #cap_video.set(cv.CAP_PROP_POS_FRAMES, start_frame)
             self.log(
                 f"Resolución: {int(width)}x{int(height)} | FPS: {fps:.2f} | Total frames: {int(total_frames)}",
                 "INFO",
@@ -597,12 +605,11 @@ class App:
             extraction_length = max(1, end_frame - start_frame)
             frame_jump = int(fps) * frame_interval_second
 
-            already_files = (
-                [f.name for f in Path(destine).iterdir() if f.is_file()]
-                if Path(destine).exists()
-                else []
-            )
+            """ already_files = [f.name for f in Path(destine).iterdir() if f.is_file()] if Path(destine).exists() else []
             print(already_files)
+            print(start_frame, end_frame, frame_jump)
+            a = [x for x in range(start_frame, end_frame, frame_jump)]
+            print(a) """
 
             for x in range(start_frame, end_frame, frame_jump):
                 cap_video.set(cv.CAP_PROP_POS_FRAMES, x)
@@ -623,10 +630,8 @@ class App:
                 filename = f"{timestamp}.jpg"
                 final_write_image = Path(destine, filename)
 
-                # self.write_frames_to_images(destine, filename, frame)
-                self.executor.submit(
-                    self.write_frames_to_images, destine, filename, frame
-                )
+                #self.write_frames_to_images(destine, filename, frame)
+                self.executor.submit(self.write_frames_to_images, destine, filename, frame)
                 self.log(f"Imagen guardada en {final_write_image}", "SUCCESS")
 
                 total_images += 1
@@ -634,10 +639,11 @@ class App:
                 self.emit("progress", progress, total_images)
                 # print(end_frame,(int(fps) * frame_interval_second))
 
+
             if status != "cancelled":
                 status = "success"
                 status_message = f"Proceso finalizado con éxito. Se procesaron {total_images} imágenes."
-                self.log(status_message, "SUCCESS")
+                self.log(status_message, "COMPLETED")
                 self.emit("progress", 1.0, total_images)
 
         except Exception as error:
@@ -695,7 +701,7 @@ La aplicación crea una carpeta nueva automáticamente para evitar que se sobres
 
 
 if __name__ == "__main__":
-    ctk.set_appearance_mode("system")
+    ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
     root = ctk.CTk()
     app = App(root)
